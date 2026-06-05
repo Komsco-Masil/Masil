@@ -16,6 +16,7 @@ class Store(Base):
     # 관계 정의
     store_users = relationship("StoreUser", back_populates="store", cascade="all, delete-orphan")
     invites = relationship("StoreInvite", back_populates="store", cascade="all, delete-orphan")
+    promotions = relationship("Promotion", back_populates="store", cascade="all, delete-orphan")
 
 
 class StoreUser(Base):

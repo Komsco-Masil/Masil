@@ -21,6 +21,13 @@ app = FastAPI(
 # API 라우터 등록
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+from app.core.scheduler import start_scheduler
+
+@app.on_event("startup")
+def startup_event():
+    if "pytest" not in sys.modules:
+        start_scheduler()
+
 
 @app.get("/")
 def read_root() -> dict:

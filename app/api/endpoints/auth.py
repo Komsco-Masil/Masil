@@ -2,10 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
-from app.core.security import get_password_hash, verify_password, create_access_token
+from app.api.deps import get_db, get_current_user, reusable_oauth2
+from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, Token
+from app.models.token import RefreshToken, TokenBlacklist
+from app.schemas.user import UserCreate, UserResponse, Token, TokenRefreshRequest
+from app.core.config import settings
+import datetime
+from jose import jwt
 
 router = APIRouter()
 
@@ -71,7 +75,137 @@ def login(
         )
 
     access_token = create_access_token(subject=user.id)
+    refresh_token = create_refresh_token(subject=user.id)
+
+    # Decode refresh token to save its exact expiration time
+    try:
+        payload = jwt.decode(
+            refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        exp = payload.get("exp")
+        expires_at = datetime.datetime.fromtimestamp(exp, tz=datetime.timezone.utc).replace(tzinfo=None)
+    except Exception:
+        expires_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(days=7)
+
+    # Save to db
+    db_refresh = RefreshToken(
+        token=refresh_token,
+        user_id=user.id,
+        expires_at=expires_at
+    )
+    db.add(db_refresh)
+    db.commit()
+
     return {
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer"
     }
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_token(
+    payload: TokenRefreshRequest,
+    db: Session = Depends(get_db)
+) -> dict:
+    """
+    Refresh Token을 검증하여 새로운 Access Token과 Refresh Token을 발급받는 API
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+    )
+    # 1. DB에서 리프레시 토큰 조회 및 유효성(revoked 여부) 검증
+    db_refresh = db.query(RefreshToken).filter(
+        RefreshToken.token == payload.refresh_token,
+        RefreshToken.is_revoked == False
+    ).first()
+    if not db_refresh:
+        raise credentials_exception
+
+    # 만료 여부 확인
+    if db_refresh.expires_at < datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None):
+        db_refresh.is_revoked = True
+        db.commit()
+        raise credentials_exception
+
+    # 2. JWT Decode
+    try:
+        jwt_payload = jwt.decode(
+            payload.refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        user_id_str: str = jwt_payload.get("sub")
+        token_type: str = jwt_payload.get("type")
+        if user_id_str is None or token_type != "refresh":
+            raise credentials_exception
+        user_id = int(user_id_str)
+    except Exception:
+        raise credentials_exception
+
+    # 3. 새로운 토큰 발급 및 기존 토큰 revoke
+    db_refresh.is_revoked = True
+    
+    new_access_token = create_access_token(subject=user_id)
+    new_refresh_token = create_refresh_token(subject=user_id)
+
+    try:
+        new_payload = jwt.decode(
+            new_refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        new_exp = new_payload.get("exp")
+        new_expires_at = datetime.datetime.fromtimestamp(new_exp, tz=datetime.timezone.utc).replace(tzinfo=None)
+    except Exception:
+        new_expires_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(days=7)
+
+    new_db_refresh = RefreshToken(
+        token=new_refresh_token,
+        user_id=user_id,
+        expires_at=new_expires_at
+    )
+    db.add(new_db_refresh)
+    db.commit()
+
+    return {
+        "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer"
+    }
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+def logout(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    token: str = Depends(reusable_oauth2)
+) -> dict:
+    """
+    로그아웃 API (Access Token 블랙리스트 추가 및 Refresh Token 만료 처리)
+    """
+    # 1. Access Token을 블랙리스트에 추가
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        exp = payload.get("exp")
+        expires_at = datetime.datetime.fromtimestamp(exp, tz=datetime.timezone.utc).replace(tzinfo=None)
+    except Exception:
+        expires_at = datetime.datetime.now(timezone.utc).replace(tzinfo=None) + datetime.timedelta(hours=24)
+
+    # 이미 블랙리스트에 있는지 확인
+    existing_blacklist = db.query(TokenBlacklist).filter(TokenBlacklist.token == token).first()
+    if not existing_blacklist:
+        blacklist_item = TokenBlacklist(
+            token=token,
+            expires_at=expires_at
+        )
+        db.add(blacklist_item)
+
+    # 2. 사용자의 모든 활성화된 리프레시 토큰 폐기 (revoke)
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == current_user.id,
+        RefreshToken.is_revoked == False
+    ).update({RefreshToken.is_revoked: True})
+
+    db.commit()
+
+    return {"detail": "Successfully logged out"}

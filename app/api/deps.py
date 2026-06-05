@@ -49,6 +49,11 @@ def get_current_user(
     except (JWTError, ValueError):
         raise credentials_exception
         
+    from app.models.token import TokenBlacklist
+    is_blacklisted = db.query(TokenBlacklist).filter(TokenBlacklist.token == token).first()
+    if is_blacklisted:
+        raise credentials_exception
+
     user = db.query(User).filter(User.id == token_data.user_id).first()
     if not user:
         raise credentials_exception
