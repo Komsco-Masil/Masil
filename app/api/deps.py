@@ -9,6 +9,7 @@ from app.core.database import SessionLocal
 from app.models.user import User
 from app.schemas.user import TokenData
 from app.services.giftcard_client import LocalGiftCardClient
+from app.services.nts_client import NTSBusinessClient
 
 # 토큰 획득 엔드포인트 URL 지정
 reusable_oauth2 = OAuth2PasswordBearer(
@@ -26,6 +27,10 @@ def get_db() -> Generator[Session, None, None]:
 def get_giftcard_client() -> LocalGiftCardClient:
     """조폐공사 API 연동용 Mock 클라이언트 주입"""
     return LocalGiftCardClient()
+
+def get_nts_client() -> NTSBusinessClient:
+    """국세청 API 연동용 클라이언트 주입"""
+    return NTSBusinessClient()
 
 def get_current_user(
     db: Session = Depends(get_db), 

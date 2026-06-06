@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_user, get_giftcard_client
+from app.api.deps import get_db, get_current_user, get_giftcard_client, get_nts_client
 from app.models.user import User
 from app.models.store import Store, StoreUser
 from app.schemas.store import StoreVerifyRequest, StoreResponse
 from app.services.giftcard_client import LocalGiftCardClient, GiftCardAPIException
+from app.services.nts_client import NTSBusinessClient, NTSAPIException
 
 router = APIRouter()
 
@@ -15,15 +16,15 @@ async def verify_and_register_store(
     payload: StoreVerifyRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    giftcard_client: LocalGiftCardClient = Depends(get_giftcard_client)
+    nts_client: NTSBusinessClient = Depends(get_nts_client)
 ) -> Store:
     """
     가맹점 인증 및 권한 부여 API (MEM-02, MEM-03)
     
     - 이미 등록된 사업자등록번호인 경우: 409 Conflict
-    - 외부 API 대조 성공 시: 사장 권한(OWNER) 부여 및 StoreUser 매핑 저장
-    - 외부 API 불일치 시: 400 Bad Request
-    - 외부 API 타임아웃/오류 발생 시: 500 에러를 내지 않고 is_manual_review=True로 강제 저장하며 권한 부여
+    - 국세청 API 대조 성공 시: 사장 권한(OWNER) 부여 및 StoreUser 매핑 저장
+    - 국세청 API 불일치 시: 400 Bad Request
+    - 국세청 API 타임아웃/오류 발생 시: 500 에러를 내지 않고 is_manual_review=True로 강제 저장하며 권한 부여 및 안내 메시지 반환
     """
     # 이미 다른 유저가 등록한 사업자등록번호인지 조회 (MEM-03 예외 처리)
     existing_store = db.query(Store).filter(
@@ -36,23 +37,29 @@ async def verify_and_register_store(
         )
 
     is_manual_review = False
+    custom_message = None
 
     try:
-        # 외부 조폐공사 API 연동
-        verification_success = await giftcard_client.verify_store(
+        # 국세청 API 연동
+        result = await nts_client.verify_business(
             business_number=payload.business_number,
-            name=payload.name,
-            address=payload.address
+            start_date=payload.start_date,
+            representative_name=payload.representative_name,
+            name=payload.name
         )
-        if not verification_success:
+        valid = result.get("valid")
+        valid_msg = result.get("valid_msg", "")
+        
+        if valid != "01":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Store details do not match"
+                detail=f"사업자 정보 불일치: {valid_msg}"
             )
             
-    except GiftCardAPIException:
-        # 외부 API 타임아웃/오류 발생 시, 500 에러 대신 수동 검토 대기 플래그로 대체 (MEM-03 예외 처리)
+    except NTSAPIException:
+        # 외부 API 타임아웃/오류 발생 시, 500 에러 대신 수동 검토 대기 플래그로 대체
         is_manual_review = True
+        custom_message = "인증 서버 지연으로 인해 관리자 수동 검토로 전환되었습니다."
 
     # 가맹점 정보 저장
     new_store = Store(
@@ -77,4 +84,8 @@ async def verify_and_register_store(
 
     db.commit()
     db.refresh(new_store)
+    
+    if custom_message:
+        new_store.message = custom_message
+        
     return new_store

@@ -11,6 +11,8 @@ class Store(Base):
     name = Column(String(100), nullable=False)                                     # 가맹점명
     address = Column(String(255), nullable=False)                                   # 주소
     is_manual_review = Column(Boolean, default=False, nullable=False)               # 수동 검토 대상 여부
+
+
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), nullable=False)
 
     # 관계 정의

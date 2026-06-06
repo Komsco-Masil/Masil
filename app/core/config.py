@@ -1,6 +1,20 @@
 import os
 from typing import List
 
+# .env 파일 로드 로직 (별도 외부 패키지 의존성 없이 환경변수 로드)
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+if os.path.exists(env_path):
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                key_clean = key.strip()
+                val_clean = val.strip()
+                if key_clean not in os.environ:
+                    os.environ[key_clean] = val_clean
+
+
 class Settings:
     PROJECT_NAME: str = "Masil"
     API_V1_STR: str = "/api"
@@ -23,5 +37,8 @@ class Settings:
     )
     # 공공데이터포털 서비스키 (Dotenv 로드)
     KOREA_MINTING_SERVICE_KEY: str = os.getenv("KOREA_MINTING_SERVICE_KEY", "")
+
+    # 국세청 사업자등록정보 진위확인 API 설정 (Dotenv 로드)
+    NTS_API_KEY: str = os.getenv("NTS_API_KEY", "")
 
 settings = Settings()

@@ -9,12 +9,19 @@ class StoreBase(BaseModel):
 class StoreCreate(StoreBase):
     is_manual_review: bool = False
 
+from typing import Optional
+
 class StoreResponse(StoreBase):
     id: int
     is_manual_review: bool
     created_at: datetime.datetime
+    message: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 class StoreVerifyRequest(StoreBase):
-    pass
+    start_date: Optional[str] = Field("", description="개업일자 (8자리_YYYYMMDD)")
+    representative_name: Optional[str] = Field("", description="대표자성명")
+
+
+

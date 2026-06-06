@@ -1,8 +1,9 @@
 # 📋 프로젝트 마실 - FastAPI 백엔드 개발 에이전트 로그
 
 ## 🚀 최신 업데이트 일자
-- **일시**: 2026-06-04 (현재 시간 기준)
-- **요약**: MEM-01 ~ MEM-04 회원 및 가맹점 인증 (FastAPI + SQLAlchemy) 기능 개발 상황
+- **일시**: 2026-06-06 (현재 시간 기준)
+- **요약**: 국세청 사업자등록정보 진위확인 API 연동 구현 완료 및 17개 단위 테스트 100% 통과
+
 
 ---
 
@@ -22,6 +23,12 @@
 - [x] **조폐공사 실 연동 구현**: `app/services/giftcard_client.py`를 비동기 HTTP 호출 방식(`httpx.AsyncClient`)으로 개편하여 실제 한국조폐공사 가맹점 오픈 API 연동 완료.
 - [x] **환경 변수 보안 관리**: `.env.example` 작성 및 `app/core/config.py` 설정을 통해 공공데이터 API 서비스 키 보안 관리 설계 완료.
 - [x] **API 비동기화 및 테스트 통과**: 가맹점 검증 라우터를 비동기(`async/await`) 함수로 리팩토링하고 13개 단위 테스트 검증(100% 통과) 완료.
+- [x] **국세청 사업자등록정보 진위확인 API 연동 및 사용자 인증 시스템 구현**:
+  - `app/services/nts_client.py`에 비동기 `NTSBusinessClient` 구현 (개인사업자 대조 연동).
+  - `.env` 및 `app/core/config.py`에 `NTS_API_KEY` 연동.
+  - `/api/stores/verify` 엔드포인트를 NTS API 검증 로직으로 개편하여 정보 일치 시 `OWNER` 격상 및 `StoreUser` 매핑 등록.
+  - 외부 API 타임아웃 또는 서버 장애 발생 시 `is_manual_review=True`로 자동 임시 승인 및 관리자 수동 검토 안내 메시지 반환 구현 완료.
+  - 관련 신규 케이스를 포함한 총 17개 단위 테스트를 수행하여 100% 검증 완료.
 
 ---
 

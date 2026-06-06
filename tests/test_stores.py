@@ -95,7 +95,7 @@ def test_verify_store_details_mismatch(client):
         headers={"Authorization": f"Bearer {t3}"}
     )
     assert response.status_code == 400
-    assert "Store details do not match" in response.json()["detail"]
+    assert "사업자 정보 불일치" in response.json()["detail"]
 
 
 def test_verify_store_timeout_fallback(client, db):
@@ -113,6 +113,7 @@ def test_verify_store_timeout_fallback(client, db):
     )
     assert response.status_code == 201
     assert response.json()["is_manual_review"] is True
+    assert response.json()["message"] == "인증 서버 지연으로 인해 관리자 수동 검토로 전환되었습니다."
 
     # DB 검증 (수동 검토 플래그 및 권한 격상 완료 확인)
     user = db.query(User).filter(User.nickname == "owner4").first()
@@ -126,3 +127,32 @@ def test_verify_store_timeout_fallback(client, db):
         StoreUser.user_id == user.id
     ).first()
     assert mapping.role == "OWNER"
+
+
+def test_verify_store_nts_fields(client, db):
+    """국세청 파라미터(개업일자, 대표자명)가 전달되었을 때의 성공 테스트"""
+    # 1. 회원가입 및 로그인
+    client.post(
+        "/api/auth/signup",
+        json={"nickname": "owner5", "neighborhood": "서울시 서초구", "password": "password", "is_terms_agreed": True}
+    )
+    t = client.post("/api/auth/login", data={"username": "owner5", "password": "password"}).json()["access_token"]
+    headers = {"Authorization": f"Bearer {t}"}
+
+    # 2. 가맹점 인증 요청 (국세청 파라미터 포함)
+    response = client.post(
+        "/api/stores/verify",
+        json={
+            "business_number": "123-45-67890",
+            "name": "마실카페2",
+            "address": "서울시 서초구 서초동 123",
+            "start_date": "20200101",
+            "representative_name": "홍길동"
+        },
+        headers=headers
+    )
+    assert response.status_code == 201
+    store_data = response.json()
+    assert store_data["business_number"] == "123-45-67890"
+    assert store_data["is_manual_review"] is False
+
