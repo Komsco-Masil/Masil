@@ -7,7 +7,7 @@ from app.api.deps import get_db, get_current_user, reusable_oauth2
 from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
 from app.models.user import User
 from app.models.token import RefreshToken, TokenBlacklist
-from app.schemas.user import UserCreate, UserResponse, Token, TokenRefreshRequest
+from app.schemas.user import UserCreate, UserResponse, Token, TokenRefreshRequest, UserUpdate
 from app.core.config import settings
 import datetime
 from jose import jwt
@@ -108,8 +108,51 @@ def social_login(payload: SocialLoginRequest, db: Session = Depends(get_db)) -> 
             "neighborhood": user.neighborhood,
             "provider": user.provider,
             "social_id": user.social_id,
+            "avatar_url": user.avatar_url,
         }
     }
+
+
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)) -> User:
+    """
+    현재 로그인한 사용자의 프로필 정보 조회 API
+    """
+    return current_user
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_me(
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    닉네임, 동네, 프로필 이미지를 수정하는 API
+    """
+    if payload.nickname is not None:
+        next_nickname = payload.nickname.strip()
+        duplicate = db.query(User).filter(
+            User.nickname == next_nickname,
+            User.id != current_user.id,
+        ).first()
+        if duplicate:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Nickname already exists"
+            )
+        current_user.nickname = next_nickname
+
+    if payload.neighborhood is not None:
+        current_user.neighborhood = payload.neighborhood.strip()
+
+    if payload.avatar_url is not None:
+        current_user.avatar_url = payload.avatar_url.strip() or None
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

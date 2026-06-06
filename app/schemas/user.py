@@ -29,9 +29,16 @@ class UserResponse(UserBase):
     role: str
     provider: str
     social_id: Optional[str] = None
+    avatar_url: Optional[str] = None
     created_at: datetime.datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserUpdate(BaseModel):
+    nickname: Optional[str] = Field(None, min_length=2, max_length=50)
+    neighborhood: Optional[str] = Field(None, min_length=1, max_length=100)
+    avatar_url: Optional[str] = None
 
 
 class Token(BaseModel):

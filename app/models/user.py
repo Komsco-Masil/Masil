@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Text
 from sqlalchemy.orm import relationship
 from app.models.base import Base
 import datetime
@@ -12,6 +12,7 @@ class User(Base):
     role = Column(String(20), default="USER", nullable=False)               # 권한: USER, OWNER, EMPLOYEE
     provider = Column(String(20), default="LOCAL", nullable=False)           # 가입경로: LOCAL, KAKAO, NAVER, GOOGLE
     social_id = Column(String(100), nullable=True, index=True)              # 소셜 고유 ID
+    avatar_url = Column(Text, nullable=True)                                # 프로필 이미지 URL 또는 data URL
     hashed_password = Column(String(255), nullable=True)                    # 비밀번호 해시 (일반 가입용)
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), nullable=False)
 

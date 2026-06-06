@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.api import api_router
+from sqlalchemy import inspect, text
 
 import sys
 import logging
@@ -10,6 +11,11 @@ import logging
 if "pytest" not in sys.modules:
     try:
         Base.metadata.create_all(bind=engine)
+        if settings.DATABASE_URL.startswith("sqlite"):
+            columns = {column["name"] for column in inspect(engine).get_columns("users")}
+            if "avatar_url" not in columns:
+                with engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE users ADD COLUMN avatar_url TEXT"))
     except Exception as e:
         logging.warning(f"Default database connection failed. Skipping eager table creation: {e}")
 
