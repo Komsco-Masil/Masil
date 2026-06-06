@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
 
 from app.api.deps import get_db, get_current_user, reusable_oauth2
 from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
@@ -12,6 +13,103 @@ import datetime
 from jose import jwt
 
 router = APIRouter()
+
+
+class SocialLoginRequest(BaseModel):
+    provider: str = Field(..., min_length=2, max_length=20)
+    social_id: str = Field(..., min_length=2, max_length=100)
+    nickname: str = Field(..., min_length=2, max_length=50)
+    neighborhood: str = "동네 미설정"
+
+
+def issue_tokens(user_id: int, db: Session) -> dict:
+    access_token = create_access_token(subject=user_id)
+    refresh_token = create_refresh_token(subject=user_id)
+
+    try:
+        payload = jwt.decode(
+            refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        exp = payload.get("exp")
+        expires_at = datetime.datetime.fromtimestamp(exp, tz=datetime.timezone.utc).replace(tzinfo=None)
+    except Exception:
+        expires_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(days=7)
+
+    db_refresh = RefreshToken(
+        token=refresh_token,
+        user_id=user_id,
+        expires_at=expires_at
+    )
+    db.add(db_refresh)
+    db.commit()
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    }
+
+
+@router.get("/check-nickname")
+def check_nickname(nickname: str, db: Session = Depends(get_db)) -> dict:
+    """
+    닉네임/아이디 중복 확인 API
+    """
+    normalized = nickname.strip()
+    if len(normalized) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nickname must be at least 2 characters"
+        )
+
+    exists = db.query(User).filter(User.nickname == normalized).first() is not None
+    return {
+        "available": not exists,
+        "nickname": normalized
+    }
+
+
+@router.post("/social-login")
+def social_login(payload: SocialLoginRequest, db: Session = Depends(get_db)) -> dict:
+    """
+    소셜 로그인 API
+
+    실제 OAuth 검증은 provider SDK 연동 후 추가하고, 현재는 프론트 소셜 버튼과
+    앱 세션 흐름을 검증하기 위한 provider/social_id 기반 로그인입니다.
+    """
+    provider = payload.provider.upper()
+    user = db.query(User).filter(
+        User.provider == provider,
+        User.social_id == payload.social_id
+    ).first()
+
+    if not user:
+        nickname = payload.nickname.strip()
+        duplicate = db.query(User).filter(User.nickname == nickname).first()
+        if duplicate:
+            nickname = f"{nickname}_{provider.lower()}"
+
+        user = User(
+            nickname=nickname,
+            neighborhood=payload.neighborhood,
+            provider=provider,
+            social_id=payload.social_id,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    token_data = issue_tokens(user.id, db)
+    return {
+        **token_data,
+        "user": {
+            "id": user.id,
+            "nickname": user.nickname,
+            "neighborhood": user.neighborhood,
+            "provider": user.provider,
+            "social_id": user.social_id,
+        }
+    }
 
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -74,33 +172,7 @@ def login(
             detail="Incorrect nickname or password"
         )
 
-    access_token = create_access_token(subject=user.id)
-    refresh_token = create_refresh_token(subject=user.id)
-
-    # Decode refresh token to save its exact expiration time
-    try:
-        payload = jwt.decode(
-            refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-        )
-        exp = payload.get("exp")
-        expires_at = datetime.datetime.fromtimestamp(exp, tz=datetime.timezone.utc).replace(tzinfo=None)
-    except Exception:
-        expires_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(days=7)
-
-    # Save to db
-    db_refresh = RefreshToken(
-        token=refresh_token,
-        user_id=user.id,
-        expires_at=expires_at
-    )
-    db.add(db_refresh)
-    db.commit()
-
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
+    return issue_tokens(user.id, db)
 
 
 @router.post("/refresh", response_model=Token)
