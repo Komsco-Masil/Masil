@@ -33,9 +33,21 @@ async def verify_and_register_store(
         Store.business_number == payload.business_number
     ).first()
     if existing_store:
+        existing_mapping = db.query(StoreUser).filter(
+            StoreUser.store_id == existing_store.id,
+            StoreUser.user_id == current_user.id,
+        ).first()
+        if existing_mapping:
+            current_user.role = existing_mapping.role
+            db.add(current_user)
+            db.commit()
+            db.refresh(existing_store)
+            existing_store.message = "이미 인증된 가맹점 권한을 다시 연결했어요."
+            return existing_store
+
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Store already registered"
+            detail="이미 다른 계정에 등록된 사업자번호입니다."
         )
 
     is_manual_review = False
