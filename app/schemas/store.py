@@ -1,6 +1,6 @@
 import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 class StoreBase(BaseModel):
     business_number: str = Field(..., min_length=1)  # 사업자등록번호
@@ -23,10 +23,18 @@ class StoreResponse(StoreBase):
     model_config = ConfigDict(from_attributes=True)
 
 class StoreVerifyRequest(BaseModel):
-    business_number: str = Field(..., min_length=1)
+    business_number: str = Field(..., min_length=10, max_length=10)
     name: str = Field(..., min_length=1)
     representative_name: str = Field(..., min_length=1, description="대표자성명")
     address: Optional[str] = ""
+
+    @field_validator("business_number", mode="before")
+    @classmethod
+    def normalize_business_number(cls, value: object) -> str:
+        normalized = "".join(char for char in str(value) if char.isdigit())
+        if len(normalized) != 10:
+            raise ValueError("사업자등록번호는 숫자 10자리여야 합니다")
+        return normalized
 
 
 class PublicDataSource(BaseModel):
