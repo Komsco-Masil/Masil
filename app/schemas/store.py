@@ -1,4 +1,5 @@
 import datetime
+from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 class StoreBase(BaseModel):
@@ -9,11 +10,13 @@ class StoreBase(BaseModel):
 class StoreCreate(StoreBase):
     is_manual_review: bool = False
 
-from typing import Optional
-
 class StoreResponse(StoreBase):
     id: int
     is_manual_review: bool
+    nts_verified: bool = False
+    gift_card_verified: bool = False
+    public_data_source: Optional[str] = None
+    verified_at: Optional[datetime.datetime] = None
     created_at: datetime.datetime
     message: Optional[str] = None
 
@@ -24,4 +27,24 @@ class StoreVerifyRequest(StoreBase):
     representative_name: Optional[str] = Field("", description="대표자성명")
 
 
+class PublicDataSource(BaseModel):
+    name: str
+    provider: str
+    purpose: str
+    status: str
 
+
+class PublicDataStore(BaseModel):
+    id: str
+    name: str
+    address: str
+    category: str
+    gift_card_verified: bool
+    source: str
+
+
+class PublicDataSummaryResponse(BaseModel):
+    title: str
+    description: str
+    sources: list[PublicDataSource]
+    stores: list[PublicDataStore]

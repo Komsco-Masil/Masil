@@ -25,11 +25,30 @@ def ensure_avatar_url_column() -> None:
         connection.execute(text(f"ALTER TABLE users ADD COLUMN avatar_url {column_type}"))
 
 
+def ensure_store_public_data_columns() -> None:
+    if not inspect(engine).has_table("stores"):
+        return
+
+    columns = {column["name"] for column in inspect(engine).get_columns("stores")}
+    migrations = {
+        "nts_verified": "ALTER TABLE stores ADD COLUMN nts_verified BOOLEAN NOT NULL DEFAULT 0",
+        "gift_card_verified": "ALTER TABLE stores ADD COLUMN gift_card_verified BOOLEAN NOT NULL DEFAULT 0",
+        "public_data_source": "ALTER TABLE stores ADD COLUMN public_data_source VARCHAR(120)",
+        "verified_at": "ALTER TABLE stores ADD COLUMN verified_at DATETIME",
+    }
+
+    for column_name, statement in migrations.items():
+        if column_name not in columns:
+            with engine.begin() as connection:
+                connection.execute(text(statement))
+
+
 # 애플리케이션 시작 시 DB 테이블 자동 생성 (테스트 실행 중인 경우 제외)
 if "pytest" not in sys.modules:
     try:
         Base.metadata.create_all(bind=engine)
         ensure_avatar_url_column()
+        ensure_store_public_data_columns()
     except Exception as e:
         logging.warning(f"Default database connection failed. Skipping eager table creation: {e}")
 

@@ -11,7 +11,10 @@ class Store(Base):
     name = Column(String(100), nullable=False)                                     # 가맹점명
     address = Column(String(255), nullable=False)                                   # 주소
     is_manual_review = Column(Boolean, default=False, nullable=False)               # 수동 검토 대상 여부
-
+    nts_verified = Column(Boolean, default=False, nullable=False)                   # 국세청 사업자 진위확인 여부
+    gift_card_verified = Column(Boolean, default=False, nullable=False)             # 지역사랑상품권 가맹점 공공데이터 대조 여부
+    public_data_source = Column(String(120), nullable=True)                         # 검증에 사용한 공공데이터 출처
+    verified_at = Column(DateTime, nullable=True)                                   # 공공데이터 검증 완료 시각
 
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), nullable=False)
 
