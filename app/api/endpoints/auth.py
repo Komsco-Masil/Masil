@@ -304,7 +304,7 @@ def logout(
         exp = payload.get("exp")
         expires_at = datetime.datetime.fromtimestamp(exp, tz=datetime.timezone.utc).replace(tzinfo=None)
     except Exception:
-        expires_at = datetime.datetime.now(timezone.utc).replace(tzinfo=None) + datetime.timedelta(hours=24)
+        expires_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) + datetime.timedelta(hours=24)
 
     # 이미 블랙리스트에 있는지 확인
     existing_blacklist = db.query(TokenBlacklist).filter(TokenBlacklist.token == token).first()

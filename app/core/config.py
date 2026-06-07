@@ -15,6 +15,25 @@ if os.path.exists(env_path):
                     os.environ[key_clean] = val_clean
 
 
+def resolve_database_url() -> str:
+    """Vercel/Neon 등 배포 환경의 DB URL을 SQLAlchemy 형식으로 정규화합니다."""
+    url = (
+        os.getenv("DATABASE_URL")
+        or os.getenv("POSTGRES_URL")
+        or os.getenv("POSTGRES_PRISMA_URL")
+        or "postgresql://postgres:postgres@localhost:5432/masil"
+    )
+
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+
+    if url.startswith("postgresql") and "localhost" not in url and "127.0.0.1" not in url:
+        if "sslmode=" not in url:
+            url += ("&" if "?" in url else "?") + "sslmode=require"
+
+    return url
+
+
 class Settings:
     PROJECT_NAME: str = "Masil"
     API_V1_STR: str = "/api"
@@ -24,11 +43,8 @@ class Settings:
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24시간 (초대 코드 만료 시간과 맞춤)
 
-    # 데이터베이스 설정 (기본값은 PostgreSQL, 필요 시 SQLite 등 변경 가능)
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL", 
-        "postgresql://postgres:postgres@localhost:5432/masil"
-    )
+    # 데이터베이스 설정 (Vercel Postgres/Neon 환경변수도 자동 인식)
+    DATABASE_URL: str = resolve_database_url()
 
     # 한국조폐공사 OpenAPI 설정
     KOREA_MINTING_API_URL: str = os.getenv(
