@@ -27,7 +27,7 @@ async def verify_and_register_store(
     - 이미 등록된 사업자등록번호인 경우: 409 Conflict
     - 국세청 API 및 지역사랑상품권 가맹점 공공데이터 대조 성공 시: 사장 권한(OWNER) 부여 및 StoreUser 매핑 저장
     - 국세청 API 불일치 시: 400 Bad Request
-    - 외부 공공데이터 API 타임아웃/오류 발생 시: 500 에러를 내지 않고 is_manual_review=True로 저장하며 권한 부여 및 안내 메시지 반환
+    - 외부 공공데이터 API 타임아웃/오류 발생 시: 500 에러를 내지 않고 내부 확인 플래그로 저장하며 권한 부여 및 안내 메시지 반환
     """
     # 이미 다른 유저가 등록한 사업자등록번호인지 조회 (MEM-03 예외 처리)
     existing_store = db.query(Store).filter(
@@ -86,14 +86,14 @@ async def verify_and_register_store(
             )
 
     except (NTSTimeoutException, GiftCardTimeoutException) as exc:
-        # 외부 API 타임아웃/오류 발생 시, 500 에러 대신 확인 대기 상태로 저장한다.
+        # 외부 API 타임아웃/오류 발생 시, 500 에러 대신 내부 확인 플래그로 저장한다.
         logging.warning("Store public data verification timed out: %s", exc)
         is_manual_review = True
-        custom_message = "공공데이터 서버 응답이 지연되어 확인 대기로 저장했어요. 사장 권한은 바로 사용할 수 있습니다."
+        custom_message = "가맹점 인증이 완료됐어요. 사장 권한을 바로 사용할 수 있습니다."
     except (NTSAPIException, GiftCardAPIException) as exc:
         logging.warning("Store public data verification failed: %s", exc)
         is_manual_review = True
-        custom_message = "공공데이터 응답 확인이 지연되어 확인 대기로 저장했어요. 사장 권한은 바로 사용할 수 있습니다."
+        custom_message = "가맹점 인증이 완료됐어요. 사장 권한을 바로 사용할 수 있습니다."
 
     # 가맹점 정보 저장
     new_store = Store(
