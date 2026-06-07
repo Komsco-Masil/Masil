@@ -19,8 +19,7 @@ class NTSBusinessClient:
         self,
         business_number: str,
         representative_name: str,
-        name: str,
-        start_date: str = ""
+        name: str
     ) -> dict:
         """
         국세청 API를 호출하여 사업자등록정보의 진위를 확인합니다.
@@ -62,8 +61,6 @@ class NTSBusinessClient:
             "b_sector": "",
             "b_type": ""
         }
-        if start_date:
-            business_payload["start_dt"] = start_date
 
         # 국세청 API 요청 명세 형식으로 데이터 빌드
         payload = {"businesses": [business_payload]}

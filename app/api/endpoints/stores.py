@@ -48,8 +48,7 @@ async def verify_and_register_store(
         result = await nts_client.verify_business(
             business_number=payload.business_number,
             representative_name=payload.representative_name,
-            name=payload.name,
-            start_date=payload.start_date
+            name=payload.name
         )
         valid = result.get("valid")
         valid_msg = result.get("valid_msg", "")
@@ -65,7 +64,7 @@ async def verify_and_register_store(
         gift_card_verified = await giftcard_client.verify_store(
             business_number=payload.business_number,
             name=payload.name,
-            address=payload.address
+            address=payload.address or ""
         )
         if not gift_card_verified:
             raise HTTPException(
@@ -85,7 +84,7 @@ async def verify_and_register_store(
     new_store = Store(
         business_number=payload.business_number,
         name=payload.name,
-        address=payload.address,
+        address=payload.address or "주소 미입력",
         is_manual_review=is_manual_review,
         nts_verified=nts_verified,
         gift_card_verified=gift_card_verified,

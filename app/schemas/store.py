@@ -22,9 +22,11 @@ class StoreResponse(StoreBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-class StoreVerifyRequest(StoreBase):
-    start_date: Optional[str] = Field("", description="개업일자 (8자리_YYYYMMDD)")
-    representative_name: Optional[str] = Field("", description="대표자성명")
+class StoreVerifyRequest(BaseModel):
+    business_number: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    representative_name: str = Field(..., min_length=1, description="대표자성명")
+    address: Optional[str] = ""
 
 
 class PublicDataSource(BaseModel):
