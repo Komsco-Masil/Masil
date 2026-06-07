@@ -18,9 +18,9 @@ class NTSBusinessClient:
     async def verify_business(
         self,
         business_number: str,
-        start_date: str,
         representative_name: str,
-        name: str
+        name: str,
+        start_date: str = ""
     ) -> dict:
         """
         국세청 API를 호출하여 사업자등록정보의 진위를 확인합니다.
@@ -53,21 +53,20 @@ class NTSBusinessClient:
         # 사업자등록번호에서 하이픈(-) 제거
         b_no_cleaned = business_number.replace("-", "")
 
-        # 국세청 API 요청 명세 형식으로 데이터 빌드
-        payload = {
-            "businesses": [
-                {
-                    "b_no": b_no_cleaned,
-                    "start_dt": start_date,
-                    "p_nm": representative_name,
-                    "p_nm2": "",
-                    "b_nm": name,
-                    "corp_no": "",
-                    "b_sector": "",
-                    "b_type": ""
-                }
-            ]
+        business_payload = {
+            "b_no": b_no_cleaned,
+            "p_nm": representative_name,
+            "p_nm2": "",
+            "b_nm": name,
+            "corp_no": "",
+            "b_sector": "",
+            "b_type": ""
         }
+        if start_date:
+            business_payload["start_dt"] = start_date
+
+        # 국세청 API 요청 명세 형식으로 데이터 빌드
+        payload = {"businesses": [business_payload]}
 
         # API 엔드포인트 URL
         url = f"https://api.odcloud.kr/api/nts-businessman/v1/validate?serviceKey={settings.NTS_API_KEY}"

@@ -47,9 +47,9 @@ async def verify_and_register_store(
         # 1. 국세청 사업자등록정보 진위확인 API 연동
         result = await nts_client.verify_business(
             business_number=payload.business_number,
-            start_date=payload.start_date,
             representative_name=payload.representative_name,
-            name=payload.name
+            name=payload.name,
+            start_date=payload.start_date
         )
         valid = result.get("valid")
         valid_msg = result.get("valid_msg", "")
@@ -170,7 +170,7 @@ def get_public_data_summary(db: Session = Depends(get_db)) -> dict:
             {
                 "name": "사업자등록정보 진위확인",
                 "provider": "국세청 / 공공데이터포털",
-                "purpose": "사업자등록번호, 개업일자, 대표자명 진위 확인",
+                "purpose": "사업자등록번호, 대표자성명, 사업장명 진위 확인",
                 "status": "인증 단계 적용",
             },
             {
