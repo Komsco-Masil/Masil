@@ -8,6 +8,8 @@ class UserBase(BaseModel):
     neighborhood: str = Field(..., min_length=1)
 
 class UserCreate(UserBase):
+    username: Optional[str] = Field(None, min_length=2, max_length=50)
+    display_name: Optional[str] = Field(None, min_length=2, max_length=50)
     password: Optional[str] = Field(None, min_length=4)
     provider: str = "LOCAL"
     social_id: Optional[str] = None
@@ -26,6 +28,8 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: int
+    username: Optional[str] = None
+    display_name: Optional[str] = None
     role: str
     provider: str
     social_id: Optional[str] = None
@@ -37,6 +41,7 @@ class UserResponse(UserBase):
 
 class UserUpdate(BaseModel):
     nickname: Optional[str] = Field(None, min_length=2, max_length=50)
+    display_name: Optional[str] = Field(None, min_length=2, max_length=50)
     neighborhood: Optional[str] = Field(None, min_length=1, max_length=100)
     avatar_url: Optional[str] = None
 
@@ -45,6 +50,22 @@ class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str
+
+
+class AuthUser(BaseModel):
+    id: int
+    username: Optional[str] = None
+    nickname: str
+    display_name: Optional[str] = None
+    neighborhood: str
+    provider: str
+    social_id: Optional[str] = None
+    avatar_url: Optional[str] = None
+    role: str
+
+
+class AuthResponse(Token):
+    user: AuthUser
 
 
 class TokenRefreshRequest(BaseModel):

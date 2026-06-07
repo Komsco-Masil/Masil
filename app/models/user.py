@@ -7,7 +7,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), index=True, nullable=True)                 # 로그인 아이디
     nickname = Column(String(50), unique=True, index=True, nullable=False)  # 닉네임 (중복불가)
+    display_name = Column(String(50), nullable=True)                         # 화면에 표시되는 프로필 이름
     neighborhood = Column(String(100), nullable=False)                     # 동네 정보 (필수)
     role = Column(String(20), default="USER", nullable=False)               # 권한: USER, OWNER, EMPLOYEE
     provider = Column(String(20), default="LOCAL", nullable=False)           # 가입경로: LOCAL, KAKAO, NAVER, GOOGLE

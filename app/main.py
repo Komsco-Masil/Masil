@@ -17,12 +17,20 @@ def ensure_avatar_url_column() -> None:
         return
 
     columns = {column["name"] for column in inspect(engine).get_columns("users")}
-    if "avatar_url" in columns:
-        return
+    migrations = {
+        "username": "ALTER TABLE users ADD COLUMN username VARCHAR(50)",
+        "display_name": "ALTER TABLE users ADD COLUMN display_name VARCHAR(50)",
+        "avatar_url": "ALTER TABLE users ADD COLUMN avatar_url TEXT",
+    }
 
-    column_type = "TEXT" if settings.DATABASE_URL.startswith("sqlite") else "TEXT"
+    for column_name, statement in migrations.items():
+        if column_name not in columns:
+            with engine.begin() as connection:
+                connection.execute(text(statement))
+
     with engine.begin() as connection:
-        connection.execute(text(f"ALTER TABLE users ADD COLUMN avatar_url {column_type}"))
+        connection.execute(text("UPDATE users SET username = nickname WHERE username IS NULL"))
+        connection.execute(text("UPDATE users SET display_name = nickname WHERE display_name IS NULL"))
 
 
 def ensure_store_public_data_columns() -> None:

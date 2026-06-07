@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
@@ -7,7 +8,7 @@ from app.api.deps import get_db, get_current_user, reusable_oauth2
 from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
 from app.models.user import User
 from app.models.token import RefreshToken, TokenBlacklist
-from app.schemas.user import UserCreate, UserResponse, Token, TokenRefreshRequest, UserUpdate
+from app.schemas.user import UserCreate, UserResponse, Token, TokenRefreshRequest, UserUpdate, AuthResponse
 from app.core.config import settings
 import datetime
 from jose import jwt
@@ -50,6 +51,20 @@ def issue_tokens(user_id: int, db: Session) -> dict:
     }
 
 
+def serialize_auth_user(user: User) -> dict:
+    return {
+        "id": user.id,
+        "username": user.username or user.nickname,
+        "nickname": user.nickname,
+        "display_name": user.display_name or user.nickname,
+        "neighborhood": user.neighborhood,
+        "provider": user.provider,
+        "social_id": user.social_id,
+        "avatar_url": user.avatar_url,
+        "role": user.role,
+    }
+
+
 @router.get("/check-nickname")
 def check_nickname(nickname: str, db: Session = Depends(get_db)) -> dict:
     """
@@ -62,7 +77,9 @@ def check_nickname(nickname: str, db: Session = Depends(get_db)) -> dict:
             detail="Nickname must be at least 2 characters"
         )
 
-    exists = db.query(User).filter(User.nickname == normalized).first() is not None
+    exists = db.query(User).filter(
+        or_(User.username == normalized, User.nickname == normalized)
+    ).first() is not None
     return {
         "available": not exists,
         "nickname": normalized
@@ -90,7 +107,9 @@ def social_login(payload: SocialLoginRequest, db: Session = Depends(get_db)) -> 
             nickname = f"{nickname}_{provider.lower()}"
 
         user = User(
+            username=f"{provider.lower()}_{payload.social_id}",
             nickname=nickname,
+            display_name=payload.nickname.strip(),
             neighborhood=payload.neighborhood,
             provider=provider,
             social_id=payload.social_id,
@@ -102,14 +121,7 @@ def social_login(payload: SocialLoginRequest, db: Session = Depends(get_db)) -> 
     token_data = issue_tokens(user.id, db)
     return {
         **token_data,
-        "user": {
-            "id": user.id,
-            "nickname": user.nickname,
-            "neighborhood": user.neighborhood,
-            "provider": user.provider,
-            "social_id": user.social_id,
-            "avatar_url": user.avatar_url,
-        }
+        "user": serialize_auth_user(user)
     }
 
 
@@ -131,20 +143,13 @@ def update_me(
     닉네임, 동네, 프로필 이미지를 수정하는 API
     """
     if payload.nickname is not None:
-        next_nickname = payload.nickname.strip()
-        duplicate = db.query(User).filter(
-            User.nickname == next_nickname,
-            User.id != current_user.id,
-        ).first()
-        if duplicate:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Nickname already exists"
-            )
-        current_user.nickname = next_nickname
+        current_user.display_name = payload.nickname.strip()
 
     if payload.neighborhood is not None:
         current_user.neighborhood = payload.neighborhood.strip()
+
+    if payload.display_name is not None:
+        current_user.display_name = payload.display_name.strip()
 
     if payload.avatar_url is not None:
         current_user.avatar_url = payload.avatar_url.strip() or None
@@ -163,8 +168,13 @@ def signup(user_in: UserCreate, db: Session = Depends(get_db)) -> User:
     - 닉네임 중복 시 400 Bad Request
     - LOCAL 가입 시 비밀번호 필수
     """
-    # 닉네임 중복 조회 예외 처리
-    existing_user = db.query(User).filter(User.nickname == user_in.nickname).first()
+    login_id = (user_in.username or user_in.nickname).strip()
+    display_name = (user_in.display_name or user_in.nickname).strip()
+
+    # 로그인 아이디 중복 조회 예외 처리
+    existing_user = db.query(User).filter(
+        or_(User.username == login_id, User.nickname == login_id)
+    ).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -182,7 +192,9 @@ def signup(user_in: UserCreate, db: Session = Depends(get_db)) -> User:
         hashed_password = get_password_hash(user_in.password)
 
     db_user = User(
-        nickname=user_in.nickname,
+        username=login_id,
+        nickname=login_id,
+        display_name=display_name,
         neighborhood=user_in.neighborhood,
         provider=user_in.provider,
         social_id=user_in.social_id,
@@ -194,7 +206,7 @@ def signup(user_in: UserCreate, db: Session = Depends(get_db)) -> User:
     return db_user
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=AuthResponse)
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
@@ -202,7 +214,9 @@ def login(
     """
     로그인 API (의존성 검증용 JWT 토큰 반환)
     """
-    user = db.query(User).filter(User.nickname == form_data.username).first()
+    user = db.query(User).filter(
+        or_(User.username == form_data.username, User.nickname == form_data.username)
+    ).first()
     if not user or not user.hashed_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -215,7 +229,10 @@ def login(
             detail="Incorrect nickname or password"
         )
 
-    return issue_tokens(user.id, db)
+    return {
+        **issue_tokens(user.id, db),
+        "user": serialize_auth_user(user),
+    }
 
 
 @router.post("/refresh", response_model=Token)
