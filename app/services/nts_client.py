@@ -1,5 +1,6 @@
 import httpx
 import logging
+from urllib.parse import unquote
 from app.core.config import settings
 
 class NTSAPIException(Exception):
@@ -65,13 +66,15 @@ class NTSBusinessClient:
         # 국세청 API 요청 명세 형식으로 데이터 빌드
         payload = {"businesses": [business_payload]}
 
-        # API 엔드포인트 URL
-        url = f"https://api.odcloud.kr/api/nts-businessman/v1/validate?serviceKey={settings.NTS_API_KEY}"
+        # 공공데이터포털 키는 인코딩/디코딩 키가 섞여 저장될 수 있어 한 번 정규화한다.
+        service_key = unquote(settings.NTS_API_KEY)
+        url = "https://api.odcloud.kr/api/nts-businessman/v1/validate"
 
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.post(
                     url,
+                    params={"serviceKey": service_key},
                     json=payload,
                     headers={"Content-Type": "application/json"}
                 )

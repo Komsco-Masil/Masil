@@ -1,5 +1,6 @@
 import httpx
 import logging
+from urllib.parse import unquote
 from app.core.config import settings
 
 class GiftCardAPIException(Exception):
@@ -39,8 +40,9 @@ class LocalGiftCardClient:
             logging.info("Service key is empty. Bypassing OpenAPI call with mock success.")
             return True
 
+        service_key = unquote(settings.KOREA_MINTING_SERVICE_KEY)
         params = {
-            "serviceKey": settings.KOREA_MINTING_SERVICE_KEY,
+            "serviceKey": service_key,
             "pageNo": 1,
             "numOfRows": 10,
             "resultType": "json",
@@ -67,6 +69,10 @@ class LocalGiftCardClient:
                 if result_code == "00":
                     body = res_data.get("response", {}).get("body", {})
                     items = body.get("items", [])
+                    if isinstance(items, dict):
+                        items = items.get("item", [])
+                    if isinstance(items, dict):
+                        items = [items]
                     
                     if not items:
                         return False

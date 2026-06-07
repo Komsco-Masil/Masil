@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import datetime
+import logging
 
 from app.api.deps import get_db, get_current_user, get_giftcard_client, get_nts_client
 from app.models.user import User
@@ -84,13 +85,15 @@ async def verify_and_register_store(
                 detail="지역사랑상품권 가맹점 공공데이터에서 일치하는 매장을 찾지 못했습니다."
             )
 
-    except (NTSTimeoutException, GiftCardTimeoutException):
-        # 외부 API 타임아웃/오류 발생 시, 500 에러 대신 수동 검토 대기 플래그로 대체
+    except (NTSTimeoutException, GiftCardTimeoutException) as exc:
+        # 외부 API 타임아웃/오류 발생 시, 500 에러 대신 확인 대기 상태로 저장한다.
+        logging.warning("Store public data verification timed out: %s", exc)
         is_manual_review = True
-        custom_message = "공공데이터 인증 서버 지연으로 인해 관리자 수동 검토로 전환되었습니다."
-    except (NTSAPIException, GiftCardAPIException):
+        custom_message = "공공데이터 서버 응답이 지연되어 확인 대기로 저장했어요. 사장 권한은 바로 사용할 수 있습니다."
+    except (NTSAPIException, GiftCardAPIException) as exc:
+        logging.warning("Store public data verification failed: %s", exc)
         is_manual_review = True
-        custom_message = "공공데이터 연동 오류로 관리자 수동 검토가 접수되었습니다."
+        custom_message = "공공데이터 응답 확인이 지연되어 확인 대기로 저장했어요. 사장 권한은 바로 사용할 수 있습니다."
 
     # 가맹점 정보 저장
     new_store = Store(
